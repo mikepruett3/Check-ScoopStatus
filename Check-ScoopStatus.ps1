@@ -29,6 +29,7 @@
     > .\Check-ScoopStatus.ps1
 #>
 
+
 Param (
     [Parameter(Mandatory=$false)]
     [Switch]
