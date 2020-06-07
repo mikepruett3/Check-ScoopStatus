@@ -18,7 +18,7 @@
     https://github.com/lukesampson/scoop
     https://github.com/Windos/BurntToast
 .PARAMETER Install
-    Creates a scheduled task to run script every hour...
+    Creates a scheduled task to run script every 6 hours...
 
     > .\Check-ScoopStatus.ps1 -Install
 .PARAMETER Uninstall
@@ -42,21 +42,24 @@ function Create-ScheduledTask {
     param (
     )
     begin {
+        Write-Verbose "Getting setup to create Scheduled Task..."
         $Arguments = "-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -File Check-ScoopStatus.ps1"
         $TaskName = "Check-ScoopStatus"
         $TaskDescription = "Checks for updates to either Scoop or Applications"
-        $TaskAction =   New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument $Arguments -WorkingDirectory $PSScriptRoot
-        $TaskTrigger =  New-ScheduledTaskTrigger -Once -At 12pm -RepetitionInterval (New-TimeSpan -Minutes 60)
+        $TaskAction = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument $Arguments -WorkingDirectory $PSScriptRoot
+        $TaskTrigger = New-ScheduledTaskTrigger -Once -At 12pm -RepetitionInterval (New-TimeSpan -Hours 6)
         $TaskSettings = New-ScheduledTaskSettingsSet -Hidden 
     }
     process {
-        try { Register-ScheduledTask  -Action $TaskAction -Trigger $TaskTrigger -Settings $TaskSettings -TaskName $TaskName -Description $TaskDescription -Force }
+        Write-Verbose "Creating Scheduled Task..."
+        try { Register-ScheduledTask  -Action $TaskAction -Trigger $TaskTrigger -Settings $TaskSettings -TaskName $TaskName -Description $TaskDescription -Force *> $Null }
         catch {
             Write-Error "Unable to create Scheduled Task!!!"
             Break
         }
     }
     end {
+        Write-Verbose "Cleaning up after creating Scheduled Task..."
         Clear-Variable -Name Arguments -Scope Global -ErrorAction SilentlyContinue
         Clear-Variable -Name TaskName -Scope Global -ErrorAction SilentlyContinue
         Clear-Variable -Name $TaskDescription -Scope Global -ErrorAction SilentlyContinue
@@ -69,31 +72,49 @@ function Delete-ScheduledTask {
     param (
     )
     begin {
+        Write-Verbose "Getting setup to remove Scheduled Task..."
         $TaskName = "Check-ScoopStatus"
     }
     process {
-        try { Unregister-ScheduledTask -TaskName "Check-ScoopStatus" -Confirm:$False }
+        Write-Verbose "Removing Scheduled Task..."
+        try { Unregister-ScheduledTask -TaskName $TaskName -Confirm:$False *> $Null }
         catch {
             Write-Error "Unable to remove Scheduled Task!!!"
             Break
         }
-        
     }
     end {
+        Write-Verbose "Cleaning up after removing Scheduled Task..."
         Clear-Variable -Name TaskName -Scope Global -ErrorAction SilentlyContinue
     }
 }
 
 function Check-ScoopStatus {
     begin {
-        # Create Background Job to capture output from scoop status
-        Invoke-Command -ScriptBlock {scoop update} *> $Null
-        $StatusJob = Start-Job -ScriptBlock { scoop status }
+        Write-Verbose "Running scoop update, to fetch the latest updates from scoop"
+        try { Invoke-Command -ScriptBlock {scoop update} *> $Null }
+        catch {
+            Write-Error "Unable to update scoop buckets!!!"
+            Break
+        }
+
+        Write-Verbose "Create Background Job to capture output from scoop status"
+        try { $StatusJob = Start-Job -ScriptBlock { scoop status } }
+        catch {
+            Write-Error "Unable to check scoop status!!!"
+            Break
+        }
+        
     }
     process {
-        # Wait for Backgroup Job to finish
-        Wait-Job $StatusJob -ErrorAction SilentlyContinue | Out-Null
-        # Create a new event for BurntToast, displaying the output of scoop status
+        Write-Verbose "Wait for Backgroup Job to finish"
+        try { Wait-Job $StatusJob -ErrorAction SilentlyContinue | Out-Null }
+        catch {
+            Write-Error "Cannot find the status of the Background job, or job has not finished!!!"
+            Break
+        }
+        
+        Write-Verbose "Create a new event for BurntToast, displaying the output of scoop status"
         # https://github.com/Windos/BurntToast
         # Borrowed icon from https://github.com/lukesampson/scoop/issues/2261
         if ( $StatusJob.ChildJobs.Output -ne $Null ) {
@@ -103,11 +124,11 @@ function Check-ScoopStatus {
         }
     }
     end {
-        # Stop and Remove any left-over jobs
-        Stop-Job -State Running
-        Remove-Job -State Stopped
-        Remove-Job -State Completed
-        # Cleanup Variables
+        Write-Verbose "Stop and Remove any left-over jobs"
+        Stop-Job -State Running -ErrorAction SilentlyContinue
+        Remove-Job -State Stopped -ErrorAction SilentlyContinue
+        Remove-Job -State Completed -ErrorAction SilentlyContinue
+        Write-Verbose "Cleaning up after checking status..."
         Clear-Variable -Name StatusJob -Scope Global -ErrorAction SilentlyContinue
     }
 }
