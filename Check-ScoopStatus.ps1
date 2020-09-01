@@ -119,9 +119,9 @@ function Check-ScoopStatus {
         # Borrowed icon from https://github.com/lukesampson/scoop/issues/2261
         if ( $StatusJob.ChildJobs.Output -ne $Null ) {
             New-BurntToastNotification -AppLogo $PSScriptRoot\logo.png -Text "Scoop Updates Avaliable: `n $($StatusJob.ChildJobs.Output)"
-        } else {
-            New-BurntToastNotification -AppLogo $PSScriptRoot\logo.png -Text "Scoop is up to date."
-        }
+        } #else {
+        #    New-BurntToastNotification -AppLogo $PSScriptRoot\logo.png -Text "Scoop is up to date."
+        #}
     }
     end {
         Write-Verbose "Stop and Remove any left-over jobs"
